@@ -1,0 +1,32 @@
+{
+    "model" :
+    {
+        "parameter-count" : 100e6,
+        "layer-count" : 10,
+        "reuse" : 40
+    },
+    "application" :
+    {
+        "epochs" : 40,
+        "batch-size" : 32,
+        "hours-of-speech" : 100e3,
+        "characters-per-second" : 12,
+        "sample-rate" : 16384,
+        "frame-size" : 512,
+        "frame-step" : 384
+    },
+    "system" :
+    {
+        "processor-count" : 4,
+        "memory-capacity" : 32e9,
+        "flops-per-second" : 120e12,
+        "bytes-per-second" : 700e9,
+        "memory-latency" : 500e-9
+    },
+    "sweep":
+    [
+        [["application", "batch-size"], [1, 8, 32]],
+        [["system", "processor-count"], [1, 2, 4]]
+    ]
+}
+
