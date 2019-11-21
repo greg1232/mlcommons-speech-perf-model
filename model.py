@@ -44,15 +44,23 @@ def run_model(arguments):
         pyplot.legend()
         pyplot.show()
 
-    time = run_roofline(application_model, machine_model)
+    time = run_roofline(application_model, machine_model, config["system"]["processor-count"])
 
     logger.info("Runtime is", time / 3600.0, "hours")
 
-def run_roofline(application_model, machine_model):
+def run_roofline(application_model, machine_model, processor_count):
     bandwidth_time = application_model["total-bytes"] / machine_model["bytes-per-second"]
-    compute_time   = application_model["total-flops"] / machine_model["flops-per-second"]
+    # Assume we use NCCL all-reduce, we estimate all-reduce time of n processors based on
+    # https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md
+    bandwidth_time *= 2.0 * (processor_count - 1) / processor_count
 
-    return max(bandwidth_time, compute_time)
+    compute_time   = application_model["total-flops"] / machine_model["flops-per-second"]
+    ff_compute_time = compute_time * 0.4 # empirical ratio of how much time does ff take
+    bw_compute_time = compute_time - ff_compute_time
+
+    result = ff_compute_time + max(bw_compute_time, bandwidth_time) # comm overlap only with comp
+
+    return result
 
 def plot_roofline(application_model, machine_model):
     reuse = application_model["total-flops"] / application_model["total-bytes"]
