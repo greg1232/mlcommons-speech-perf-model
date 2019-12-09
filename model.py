@@ -35,12 +35,14 @@ def run_model(arguments):
     machine_model = get_machine_model(config)
 
     if arguments["plot_roofline"]:
+        print(len(config["sweep"]))
+        bws = config["sweep"]["network-bandwidth"]
         pyplot.figure()
-        plot_roofline(application_model, machine_model)
-        plot_sweep(config)
+        for bw in bws: # one curve for a bandwidth
+            plot_roofline(config, bw, "processor-count")
 
-        pyplot.xlabel("Reuse (flops/byte)")
-        pyplot.ylabel("TFLOP/s")
+        pyplot.xlabel("Processor Count")
+        pyplot.ylabel("Iteration time (ms)")
         pyplot.legend()
         pyplot.show()
 
@@ -48,13 +50,17 @@ def run_model(arguments):
 
     logger.info("Runtime is", time / 3600.0, "hours")
 
-def run_roofline(application_model, machine_model, processor_count):
-    bandwidth_time = application_model["total-bytes"] / machine_model["bytes-per-second"]
+def iteration_time(config, bw, processor_count):
+    application_model = get_application_model(config)
+    machine_model = get_machine_model(config)
+    param_size = config["model"]["parameter-count"] * 32 # in bit
+
+    bandwidth_time = param_size / bw / 1e6
     # Assume we use NCCL all-reduce, we estimate all-reduce time of n processors based on
     # https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md
     bandwidth_time *= 2.0 * (processor_count - 1) / processor_count
 
-    compute_time   = application_model["total-flops"] / machine_model["flops-per-second"]
+    compute_time   = application_model["flops-per-iteration"] / machine_model["flops-per-second"] * 1000
     ff_compute_time = compute_time * 0.4 # empirical ratio of how much time does ff take
     bw_compute_time = compute_time - ff_compute_time
 
@@ -62,55 +68,65 @@ def run_roofline(application_model, machine_model, processor_count):
 
     return result
 
-def plot_roofline(application_model, machine_model):
-    reuse = application_model["total-flops"] / application_model["total-bytes"]
+def plot_roofline(config, bandwidth, x_axis):
+    x = config["sweep"][x_axis]
+    y = []
+    for key in x:
+        value = iteration_time(config, bandwidth, key)
+        y.append(value)
+    pyplot.plot(x, y)
 
-    reuse_range = [2.0 * reuse * i / 100.0 for i in range(100)]
-    flops_per_second = [ min(machine_model["bytes-per-second"] * reuse,
-                             machine_model["flops-per-second"]) / 1e12
-                         for reuse in reuse_range ]
+    #application_model, machine_model):
+    #reuse = application_model["total-flops"] / application_model["total-bytes"]
 
-    pyplot.plot(reuse_range, flops_per_second)
+    #reuse_range = [2.0 * reuse * i / 100.0 for i in range(100)]
+    #print(reuse_range)
+    #flops_per_second = [ min(machine_model["bytes-per-second"] * reuse,
+    #                         machine_model["flops-per-second"]) / 1e12
+    #                     for reuse in reuse_range ]
 
-def plot_sweep(config):
-    for sweep in config["sweep"]:
-        key = sweep[0]
-        values = sweep[1]
+    #pyplot.plot(reuse_range, flops_per_second)
 
-        new_config = copy.deepcopy(config)
+#def plot_sweep(config):
+#    for sweep in config["sweep"]:
+#        key = sweep[0]
+#        values = sweep[1]
+#
+#        new_config = copy.deepcopy(config)
+#
+#        for value in values:
+#            new_config[key[0]][key[1]] = value
+#
+#            plot_point(new_config, key[1] + "-" + str(value))
 
-        for value in values:
-            new_config[key[0]][key[1]] = value
-
-            plot_point(new_config, key[1] + "-" + str(value))
-
-def plot_point(config, name):
-    application_model = get_application_model(config)
-    machine_model = get_machine_model(config)
-
-    reuse = application_model["total-flops"] / application_model["total-bytes"]
-
-    tflops_per_second = min(machine_model["bytes-per-second"] * reuse,
-                            machine_model["flops-per-second"]) / 1e12
-
-    pyplot.plot(reuse, tflops_per_second, 'o', label=name)
+#def plot_point(config, name):
+#    application_model = get_application_model(config)
+#    machine_model = get_machine_model(config)
+#
+#    reuse = application_model["total-flops"] / application_model["total-bytes"]
+#
+#    tflops_per_second = min(machine_model["bytes-per-second"] * reuse,
+#                            machine_model["flops-per-second"]) / 1e12
+#
+#    pyplot.plot(reuse, tflops_per_second, 'o', label=name)
 
 def get_application_model(config):
     application_model = {}
 
-    application_model["total-bytes"] = compute_total_bytes(config)
-    application_model["total-flops"] = compute_total_flops(config)
+    #application_model["total-bytes"] = compute_total_bytes(config)
+    application_model["flops-per-iteration"] = compute_flops_per_iteration(config)
 
     return application_model
 
-def get_machine_model(config):
-    machine_model = {}
+#def get_machine_model(config):
+#    machine_model = {}
 
-    machine_model["bytes-per-second"] = config["system"]["processor-count"] * config["system"]["bytes-per-second"]
-    machine_model["flops-per-second"] = config["system"]["processor-count"] * config["system"]["flops-per-second"]
+#    machine_model["bytes-per-second"] = config["system"]["processor-count"] * config["system"]["bytes-per-second"]
+#    machine_model["flops-per-second"] = config["system"]["processor-count"] * config["system"]["flops-per-second"]
 
-    return machine_model
+#    return machine_model
 
+"""
 def compute_total_bytes(config):
     frame_size = config["application"]["frame-size"]
 
@@ -128,9 +144,10 @@ def compute_total_bytes(config):
     bytes_per_frame = model_bytes_per_frame + input_bytes_per_frame
 
     return frames * bytes_per_frame
+"""
 
-def compute_total_flops(config):
-    frames = get_frame_count(config)
+def compute_flops_per_iteration(config):
+    frames = get_frame_count_per_iteration(config)
 
     flops_per_frame = 2 * 3 * get_parameter_count(config)
 
@@ -142,20 +159,17 @@ def get_parameter_count(config):
 def get_activations_per_layer(config):
     return math.sqrt(get_parameter_count(config) / config["model"]["layer-count"])
 
-def get_frame_count(config):
-    epochs = config["application"]["epochs"]
-    hours = config["application"]["hours-of-speech"]
+def get_frame_count_per_iteration(config):
     sample_rate = config["application"]["sample-rate"]
     frame_step = config["application"]["frame-step"]
-    batch_size = config["application"]["batch-size"]
+    minibatch_size = config["application"]["batch-size"]
+    avg_length = config["application"]["avg-seconds-per-utterance"]
 
-    samples = hours * sample_rate * 3600
+    samples = sample_rate * avg_length * minibatch_size
 
-    frames_per_epoch = (samples + frame_step - 1) // frame_step
+    frames_per_iteration = (samples + frame_step - 1) // frame_step
 
-    frames = frames_per_epoch * epochs
-
-    return frames
+    return frames_per_iteration
 
 def load_config(arguments):
     return json.load(open(arguments["config_path"]))
