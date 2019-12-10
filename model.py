@@ -46,10 +46,6 @@ def run_model(arguments):
         pyplot.legend()
         pyplot.show()
 
-    time = run_roofline(application_model, machine_model, config["system"]["processor-count"])
-
-    logger.info("Runtime is", time / 3600.0, "hours")
-
 def iteration_time(config, bw, processor_count):
     application_model = get_application_model(config)
     machine_model = get_machine_model(config)
@@ -118,13 +114,13 @@ def get_application_model(config):
 
     return application_model
 
-#def get_machine_model(config):
-#    machine_model = {}
+def get_machine_model(config):
+    machine_model = {}
 
-#    machine_model["bytes-per-second"] = config["system"]["processor-count"] * config["system"]["bytes-per-second"]
-#    machine_model["flops-per-second"] = config["system"]["processor-count"] * config["system"]["flops-per-second"]
+    machine_model["bytes-per-second"] = config["system"]["processor-count"] * config["system"]["bytes-per-second"]
+    machine_model["flops-per-second"] = config["system"]["processor-count"] * config["system"]["flops-per-second"]
 
-#    return machine_model
+    return machine_model
 
 """
 def compute_total_bytes(config):
