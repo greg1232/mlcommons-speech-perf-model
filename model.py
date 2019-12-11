@@ -36,17 +36,34 @@ def run_model(arguments):
 
     if arguments["plot_roofline"]:
         print(len(config["sweep"]))
-        bws = config["sweep"]["network-bandwidth"]
+        #bws = config["sweep"]["network-bandwidth"]
+        bs = config["application"]["batch-size"]
+        bw = config["system"]["network-bandwidth"]
+        pcs = config["sweep"]["processor-count"]
         pyplot.figure()
-        for bw in bws: # one curve for a bandwidth
-            plot_roofline(config, bw, "processor-count")
+        #for bw in bws: # one curve for a bandwidth
+        #    plot_roofline(config, bw, "processor-count")
+        for pc in pcs:
+            plot_roofline(config, bw, pc, "batch-size")
 
-        pyplot.xlabel("Processor Count")
-        pyplot.ylabel("Iteration time (ms)")
+        pyplot.xlabel("Mini-batch size")
+        pyplot.ylabel("Training time (days)")
         pyplot.legend()
         pyplot.show()
 
-def iteration_time(config, bw, processor_count):
+def plot_roofline(config, bandwidth, pc, x_axis):
+    x = config["sweep"][x_axis]
+    y = []
+    for key in x: # batch size
+        value = iteration_time(config, bandwidth, key, pc) # in milliseconds
+        iteration_count = config["application"]["hours-of-speech"]  * 3600 / key / config["application"]["avg-seconds-per-utterance"] / pc
+        epoch_count = config["application"]["epochs"]
+        training_time = value * iteration_count * epoch_count / 1000 / 3600 / 24 # in days
+        y.append(training_time)
+    pyplot.plot(x, y, label="{} processors".format(pc))
+
+def iteration_time(config, bw, bs, processor_count):
+    config["application"]["batch-size"] = bs
     application_model = get_application_model(config)
     machine_model = get_machine_model(config)
     param_size = config["model"]["parameter-count"] * 32 # in bit
@@ -63,25 +80,6 @@ def iteration_time(config, bw, processor_count):
     result = ff_compute_time + max(bw_compute_time, bandwidth_time) # comm overlap only with comp
 
     return result
-
-def plot_roofline(config, bandwidth, x_axis):
-    x = config["sweep"][x_axis]
-    y = []
-    for key in x:
-        value = iteration_time(config, bandwidth, key)
-        y.append(value)
-    pyplot.plot(x, y)
-
-    #application_model, machine_model):
-    #reuse = application_model["total-flops"] / application_model["total-bytes"]
-
-    #reuse_range = [2.0 * reuse * i / 100.0 for i in range(100)]
-    #print(reuse_range)
-    #flops_per_second = [ min(machine_model["bytes-per-second"] * reuse,
-    #                         machine_model["flops-per-second"]) / 1e12
-    #                     for reuse in reuse_range ]
-
-    #pyplot.plot(reuse_range, flops_per_second)
 
 #def plot_sweep(config):
 #    for sweep in config["sweep"]:

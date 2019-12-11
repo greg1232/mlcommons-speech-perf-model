@@ -7,7 +7,7 @@
     },
     "application" :
     {
-        "epochs" : 40,
+        "epochs" : 20,
         "batch-size" : 32,
         "hours-of-speech" : 100e3,
         "avg-seconds-per-utterance" : 7,
@@ -17,7 +17,7 @@
     },
     "system" :
     {
-        "network-bandwidth" : 10,
+        "network-bandwidth" : 100,
         "processor-count" : 1,
         "memory-capacity" : 32e9,
         "flops-per-second" : 14899e9,
@@ -26,8 +26,8 @@
     },
     "sweep":
     {
-        "network-bandwidth": [10, 20, 30, 40],
-        "processor-count": [1, 2, 4, 8, 16, 32, 64, 128]
+        "processor-count": [16, 32, 64, 128],
+        "batch-size": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 32, 64]
     }
 }
 
